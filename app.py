@@ -13,7 +13,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Theme-aware CSS (no hardcoded colors that break in dark/light mode)
+# Theme-aware CSS
 st.markdown("""
 <style>
     /* Card style - works in both light and dark themes */
@@ -49,28 +49,36 @@ st.markdown("""
         width: 2rem;
         margin: 0 auto;
     }
-    /* Price result */
+    /* Price result - wider and centered */
     .price-result {
         font-size: 2rem;
         font-weight: bold;
         text-align: center;
         background-color: rgba(76, 175, 80, 0.1);
         border-radius: 1rem;
-        padding: 1rem;
+        padding: 1.5rem;
         margin-top: 1rem;
         color: #4CAF50;
+        width: 100%;
     }
-    /* Sidebar text adjustments */
-    .sidebar-summary {
-        font-size: 0.9rem;
-        line-height: 1.4;
+    /* Disclaimer styling */
+    .disclaimer {
+        font-size: 0.8rem;
+        text-align: center;
+        color: var(--text-color);
+        opacity: 0.7;
+        margin-top: 2rem;
+        padding: 1rem;
+        border-top: 1px solid var(--border-color);
     }
     hr {
         margin: 1rem 0;
     }
-    /* Make number inputs and selects look consistent */
-    .stNumberInput, .stSelectbox, .stTextInput {
-        margin-bottom: 0.5rem;
+    /* Center button container */
+    .centered-button {
+        display: flex;
+        justify-content: center;
+        margin-top: 1rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -84,7 +92,6 @@ with st.sidebar:
     st.markdown("## 🚗 Car Price Predictor")
     st.markdown("---")
     
-    # Step indicators
     st.markdown("### 📋 Steps")
     cols = st.columns(3)
     for i in range(3):
@@ -106,7 +113,6 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 📌 Current Selections")
-    # Show selected values
     selected = {
         'Year': st.session_state.get('pyear', 2015),
         'Mileage': f"{st.session_state.get('mileage', 50000):,} km",
@@ -122,7 +128,6 @@ with st.sidebar:
 st.markdown("# 🚗 Car Price Prediction")
 st.markdown("### Fill in the details below. Navigate using the buttons.")
 
-# Helper to collect all form data
 def get_form_data():
     return {
         'production_year': st.session_state.get('pyear', 2015),
@@ -143,7 +148,6 @@ def get_form_data():
         'color': st.session_state.get('color', 'White')
     }
 
-# Page 1: Basic specs
 def page1():
     with st.container():
         st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -160,7 +164,6 @@ def page1():
         st.number_input("Engine volume (L)", min_value=0.5, max_value=8.0, step=0.1, value=2.0, key='engine_volume')
         st.markdown('</div>', unsafe_allow_html=True)
 
-# Page 2: Categorical details
 def page2():
     with st.container():
         st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -175,7 +178,6 @@ def page2():
             st.selectbox("Leather interior", ["Yes","No"], index=0, key='leather_interior')
         st.markdown('</div>', unsafe_allow_html=True)
 
-# Page 3: Drive and color
 def page3():
     with st.container():
         st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -189,7 +191,6 @@ def page3():
             st.text_input("Color", value="White", key='color')
         st.markdown('</div>', unsafe_allow_html=True)
 
-# Navigation and prediction
 def render_page():
     if st.session_state.page == 1:
         page1()
@@ -198,27 +199,33 @@ def render_page():
     elif st.session_state.page == 3:
         page3()
     
-    # Buttons
-    col1, col2, col3 = st.columns([1,2,1])
-    with col1:
-        if st.session_state.page > 1:
+    # Navigation buttons - center the next/prev and predict
+    if st.session_state.page < 3:
+        # Center the "Next" button when not on last page
+        col1, col2, col3 = st.columns([1,2,1])
+        with col2:
+            if st.button("Next ▶", type="primary", use_container_width=True):
+                st.session_state.page += 1
+                st.rerun()
+    else:
+        # On last page, center the Predict button
+        col1, col2, col3 = st.columns([1,2,1])
+        with col2:
+            if st.button("💰 Predict Price", type="primary", use_container_width=True):
+                predict_price()
+    
+    # Also show Previous button if not on first page, but keep it smaller and left-aligned
+    if st.session_state.page > 1:
+        col1, col2, col3 = st.columns([1,4,1])
+        with col1:
             if st.button("◀ Previous", use_container_width=True):
                 st.session_state.page -= 1
                 st.rerun()
-    with col3:
-        if st.session_state.page < 3:
-            if st.button("Next ▶", use_container_width=True):
-                st.session_state.page += 1
-                st.rerun()
-        else:
-            if st.button("💰 Predict Price", type="primary", use_container_width=True):
-                predict_price()
 
 def predict_price():
     form_data = get_form_data()
     input_df = pd.DataFrame([form_data])
     
-    # Feature engineering
     current_year = 2026
     input_df['car_age'] = current_year - input_df['production_year']
     input_df['age_group'] = pd.cut(input_df['car_age'],
@@ -240,10 +247,23 @@ def predict_price():
     
     price = model.predict(input_df)[0]
     
+    # Center the output using columns
     with st.container():
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown(f'<div class="price-result">✨ Estimated Price: ${price:,.2f}</div>', unsafe_allow_html=True)
+        # Center the price text within the card
+        col1, col2, col3 = st.columns([1,4,1])
+        with col2:
+            st.markdown(f'<div class="price-result">✨ Estimated Price: ${price:,.2f}</div>', unsafe_allow_html=True)
         st.balloons()
         st.markdown('</div>', unsafe_allow_html=True)
 
 render_page()
+
+# AI Disclaimer at the bottom of the page
+st.markdown("""
+<div class="disclaimer">
+🤖 <strong>AI Disclaimer:</strong> This prediction is generated by a machine learning model based on historical data. 
+Actual car prices may vary due to market conditions, location, vehicle condition, and other factors not captured by the model. 
+Use this estimate as a reference only, not as a definitive valuation.
+</div>
+""", unsafe_allow_html=True)
