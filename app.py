@@ -1,19 +1,128 @@
 import streamlit as st
 import pandas as pd
 import joblib
+import numpy as np
 
 # Load model
 model = joblib.load('car_price_model.pkl')
 
-st.set_page_config(page_title="Car Price Predictor", layout="centered")
-st.title("🚗 Car Price Prediction App")
-st.markdown("Fill in the car details across multiple steps. Use **Next** and **Previous** to navigate.")
+# Page config
+st.set_page_config(
+    page_title="Car Price Predictor",
+    page_icon="🚗",
+    layout="wide"
+)
 
-# --- Initialize session state for page only ---
+# Theme-aware CSS (no hardcoded colors that break in dark/light mode)
+st.markdown("""
+<style>
+    /* Card style - works in both light and dark themes */
+    .card {
+        background-color: var(--secondary-background-color);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        border: 1px solid var(--border-color);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    /* Step indicator styling */
+    .step-active {
+        background-color: #4CAF50;
+        color: white;
+        border-radius: 2rem;
+        padding: 0.3rem 0.8rem;
+        text-align: center;
+        font-weight: bold;
+        display: inline-block;
+        width: 2rem;
+        margin: 0 auto;
+    }
+    .step-inactive {
+        background-color: var(--secondary-background-color);
+        color: var(--text-color);
+        border: 1px solid var(--border-color);
+        border-radius: 2rem;
+        padding: 0.3rem 0.8rem;
+        text-align: center;
+        font-weight: bold;
+        display: inline-block;
+        width: 2rem;
+        margin: 0 auto;
+    }
+    /* Price result */
+    .price-result {
+        font-size: 2rem;
+        font-weight: bold;
+        text-align: center;
+        background-color: rgba(76, 175, 80, 0.1);
+        border-radius: 1rem;
+        padding: 1rem;
+        margin-top: 1rem;
+        color: #4CAF50;
+    }
+    /* Sidebar text adjustments */
+    .sidebar-summary {
+        font-size: 0.9rem;
+        line-height: 1.4;
+    }
+    hr {
+        margin: 1rem 0;
+    }
+    /* Make number inputs and selects look consistent */
+    .stNumberInput, .stSelectbox, .stTextInput {
+        margin-bottom: 0.5rem;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Initialize session state
 if 'page' not in st.session_state:
     st.session_state.page = 1
 
-# --- Helper to get form data from all widgets (keys) ---
+# Sidebar
+with st.sidebar:
+    st.markdown("## 🚗 Car Price Predictor")
+    st.markdown("---")
+    
+    # Step indicators
+    st.markdown("### 📋 Steps")
+    cols = st.columns(3)
+    for i in range(3):
+        with cols[i]:
+            if st.session_state.page == i+1:
+                st.markdown(f'<div class="step-active">{i+1}</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div class="step-inactive">{i+1}</div>', unsafe_allow_html=True)
+    
+    st.markdown("---")
+    st.markdown("### ℹ️ About")
+    st.info(
+        "This model predicts car prices based on specifications like year, mileage, "
+        "brand, and features. Trained on real-world data with **Random Forest**.\n\n"
+        "📊 **Model Performance:**\n"
+        "- R² Score: 0.7664\n"
+        "- Average error: ~$4,109"
+    )
+    
+    st.markdown("---")
+    st.markdown("### 📌 Current Selections")
+    # Show selected values
+    selected = {
+        'Year': st.session_state.get('pyear', 2015),
+        'Mileage': f"{st.session_state.get('mileage', 50000):,} km",
+        'Engine': f"{st.session_state.get('engine_volume', 2.0)} L",
+        'Manufacturer': st.session_state.get('manufacturer', 'TOYOTA'),
+        'Fuel': st.session_state.get('fuel_type', 'Petrol')
+    }
+    for k, v in selected.items():
+        st.markdown(f"**{k}:** {v}")
+    st.caption("Change values using the main panel.")
+
+# Main area
+st.markdown("# 🚗 Car Price Prediction")
+st.markdown("### Fill in the details below. Navigate using the buttons.")
+
+# Helper to collect all form data
 def get_form_data():
     return {
         'production_year': st.session_state.get('pyear', 2015),
@@ -34,35 +143,53 @@ def get_form_data():
         'color': st.session_state.get('color', 'White')
     }
 
-# --- Page 1: Basic Specs (single column) ---
+# Page 1: Basic specs
 def page1():
-    st.subheader("📅 Page 1: Basic Specifications")
-    st.number_input("Production Year", min_value=1990, max_value=2025, value=2015, key='pyear')
-    st.number_input("Levy (tax/insurance)", min_value=0, value=100, key='levy')
-    st.number_input("Mileage (km)", min_value=0, value=50000, key='mileage')
-    st.number_input("Cylinders", min_value=2, max_value=12, value=4, key='cylinders')
-    st.number_input("Airbags", min_value=0, max_value=16, value=4, key='airbags')
-    st.selectbox("Doors", [2,3,4,5], index=2, key='doors')
-    st.number_input("Engine volume (L)", min_value=0.5, step=0.1, value=2.0, key='engine_volume')
+    with st.container():
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("📅 Step 1: Basic Specifications")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.number_input("Production Year", min_value=1990, max_value=2025, value=2015, key='pyear')
+            st.number_input("Levy (tax/insurance)", min_value=0, value=100, key='levy', step=50)
+            st.number_input("Mileage (km)", min_value=0, value=50000, key='mileage', step=5000)
+        with col2:
+            st.number_input("Cylinders", min_value=2, max_value=12, value=4, key='cylinders')
+            st.number_input("Airbags", min_value=0, max_value=16, value=4, key='airbags')
+            st.selectbox("Doors", [2,3,4,5], index=2, key='doors')
+        st.number_input("Engine volume (L)", min_value=0.5, max_value=8.0, step=0.1, value=2.0, key='engine_volume')
+        st.markdown('</div>', unsafe_allow_html=True)
 
-# --- Page 2: Categorical Details (single column) ---
+# Page 2: Categorical details
 def page2():
-    st.subheader("🏷️ Page 2: Model & Interior")
-    st.selectbox("Manufacturer", ["TOYOTA","HONDA","FORD","CHEVROLET","HYUNDAI","BMW","MERCEDES-BENZ","LEXUS","NISSAN","KIA"], index=0, key='manufacturer')
-    st.text_input("Model", value="Camry", key='model')
-    st.selectbox("Fuel type", ["Petrol","Diesel","Hybrid","LPG","CNG"], index=0, key='fuel_type')
-    st.selectbox("Category", ["Sedan","Jeep","Hatchback","Minivan","Coupe","Universal"], index=0, key='category')
-    st.selectbox("Leather interior", ["Yes","No"], index=0, key='leather_interior')
+    with st.container():
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("🏷️ Step 2: Model & Interior")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.selectbox("Manufacturer", ["TOYOTA","HONDA","FORD","CHEVROLET","HYUNDAI","BMW","MERCEDES-BENZ","LEXUS","NISSAN","KIA"], index=0, key='manufacturer')
+            st.text_input("Model", value="Camry", key='model')
+            st.selectbox("Fuel type", ["Petrol","Diesel","Hybrid","LPG","CNG"], index=0, key='fuel_type')
+        with col2:
+            st.selectbox("Category", ["Sedan","Jeep","Hatchback","Minivan","Coupe","Universal"], index=0, key='category')
+            st.selectbox("Leather interior", ["Yes","No"], index=0, key='leather_interior')
+        st.markdown('</div>', unsafe_allow_html=True)
 
-# --- Page 3: Drive & Color (single column) ---
+# Page 3: Drive and color
 def page3():
-    st.subheader("⚙️ Page 3: Transmission, Drive & Color")
-    st.selectbox("Gear box type", ["Automatic","Manual","Tiptronic","Variator"], index=0, key='gear_box_type')
-    st.selectbox("Drive wheels", ["Front","Rear","4x4"], index=0, key='drive_wheels')
-    st.selectbox("Wheel", ["Left wheel","Right-hand drive"], index=0, key='wheel')
-    st.text_input("Color", value="White", key='color')
+    with st.container():
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("⚙️ Step 3: Transmission, Drive & Color")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.selectbox("Gear box type", ["Automatic","Manual","Tiptronic","Variator"], index=0, key='gear_box_type')
+            st.selectbox("Drive wheels", ["Front","Rear","4x4"], index=0, key='drive_wheels')
+        with col2:
+            st.selectbox("Wheel", ["Left wheel","Right-hand drive"], index=0, key='wheel')
+            st.text_input("Color", value="White", key='color')
+        st.markdown('</div>', unsafe_allow_html=True)
 
-# --- Navigation and prediction ---
+# Navigation and prediction
 def render_page():
     if st.session_state.page == 1:
         page1()
@@ -70,49 +197,53 @@ def render_page():
         page2()
     elif st.session_state.page == 3:
         page3()
-
-    col_btn1, col_btn2, col_btn3 = st.columns([1,1,1])
-    with col_btn1:
+    
+    # Buttons
+    col1, col2, col3 = st.columns([1,2,1])
+    with col1:
         if st.session_state.page > 1:
-            if st.button("◀ Previous"):
+            if st.button("◀ Previous", use_container_width=True):
                 st.session_state.page -= 1
                 st.rerun()
-    with col_btn3:
+    with col3:
         if st.session_state.page < 3:
-            if st.button("Next ▶"):
+            if st.button("Next ▶", use_container_width=True):
                 st.session_state.page += 1
                 st.rerun()
         else:
-            if st.button("💰 Predict Price", type="primary"):
+            if st.button("💰 Predict Price", type="primary", use_container_width=True):
                 predict_price()
 
 def predict_price():
     form_data = get_form_data()
-    input_data = pd.DataFrame([form_data])
-
-    # Feature engineering (exactly as in training)
+    input_df = pd.DataFrame([form_data])
+    
+    # Feature engineering
     current_year = 2026
-    input_data['car_age'] = current_year - input_data['production_year']
-    input_data['age_group'] = pd.cut(input_data['car_age'],
-                                     bins=[0,5,10,15,100],
-                                     labels=['New','Recent','Mid-age','Old'])
-    input_data['mileage_group'] = pd.cut(input_data['mileage'],
-                                         bins=[0,50000,100000,150000,1_000_000],
-                                         labels=['Low','Medium','High','Very High'])
-    input_data['engine_per_cylinder'] = input_data['engine_volume'] / input_data['cylinders']
-    input_data['production_year_squared'] = input_data['production_year'] ** 2
-
+    input_df['car_age'] = current_year - input_df['production_year']
+    input_df['age_group'] = pd.cut(input_df['car_age'],
+                                   bins=[0,5,10,15,100],
+                                   labels=['New','Recent','Mid-age','Old'])
+    input_df['mileage_group'] = pd.cut(input_df['mileage'],
+                                       bins=[0,50000,100000,150000,1_000_000],
+                                       labels=['Low','Medium','High','Very High'])
+    input_df['engine_per_cylinder'] = input_df['engine_volume'] / input_df['cylinders']
+    input_df['production_year_squared'] = input_df['production_year'] ** 2
+    
     feature_cols = [
         'production_year','levy','mileage','cylinders','airbags','doors',
         'manufacturer','model','fuel_type','category','leather_interior',
         'gear_box_type','drive_wheels','wheel','color','engine_volume',
         'car_age','age_group','mileage_group','engine_per_cylinder','production_year_squared'
     ]
-    input_data = input_data[feature_cols]
+    input_df = input_df[feature_cols]
+    
+    price = model.predict(input_df)[0]
+    
+    with st.container():
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown(f'<div class="price-result">✨ Estimated Price: ${price:,.2f}</div>', unsafe_allow_html=True)
+        st.balloons()
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    price = model.predict(input_data)[0]
-    st.success(f"✨ Estimated Price: **${price:,.2f}**")
-    st.balloons()
-
-# --- Run the app ---
 render_page()
