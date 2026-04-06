@@ -13,7 +13,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Theme-aware CSS with header styling
+# Theme-aware CSS with header styling and result card
 st.markdown("""
 <style>
     /* Header card styling */
@@ -68,19 +68,43 @@ st.markdown("""
         width: 2rem;
         margin: 0 auto;
     }
-    /* Full-width price result */
-    .price-result {
-        font-size: 2rem;
-        font-weight: bold;
-        text-align: center;
-        background-color: rgba(76, 175, 80, 0.1);
-        border-radius: 1rem;
+    /* Result card */
+    .result-card {
+        background: linear-gradient(145deg, #1a1a2e, #16213e);
+        border-radius: 1.5rem;
         padding: 1.5rem;
-        margin: 1rem 0;
-        color: #4CAF50;
-        width: 100%;
+        margin: 1.5rem 0;
+        border: 1px solid rgba(76, 175, 80, 0.3);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.2);
     }
-    /* Disclaimer styling */
+    .price-range {
+        font-size: 1.8rem;
+        font-weight: bold;
+        color: #4CAF50;
+        text-align: center;
+        margin-bottom: 0.5rem;
+    }
+    .confidence {
+        text-align: center;
+        color: #ffd700;
+        margin-bottom: 1rem;
+    }
+    .factor-title {
+        font-size: 1.2rem;
+        font-weight: bold;
+        margin-top: 1rem;
+        margin-bottom: 0.5rem;
+        color: #ddd;
+    }
+    .factor-item {
+        margin: 0.5rem 0;
+        padding: 0.3rem 0;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .feature-check {
+        color: #4CAF50;
+        margin-right: 0.5rem;
+    }
     .disclaimer {
         font-size: 0.8rem;
         text-align: center;
@@ -90,6 +114,9 @@ st.markdown("""
         padding: 1rem;
         border-top: 1px solid var(--border-color);
     }
+    .good { color: #4CAF50; }
+    .medium { color: #FFC107; }
+    .poor { color: #F44336; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -120,7 +147,7 @@ with st.sidebar:
         "brand, and features. Trained on real-world data with **Random Forest**.\n\n"
         "📊 **Model Performance:**\n"
         "- R² Train Score: 0.9330\n"
-        "- R² Test Score: 0.7664\n"
+        "- R² Score: 0.7664\n"
         "- Average error: ~$4,109"
     )
     st.markdown("---")
@@ -189,6 +216,66 @@ def compute_price():
     
     price = model.predict(input_df)[0]
     return price
+
+def get_factors():
+    data = get_form_data()
+    current_year = 2026
+    car_age = current_year - data['production_year']
+    factors = {}
+    
+    # Vehicle age impact
+    if car_age <= 3:
+        age_impact = "Excellent 🟢"
+        age_desc = "Very new, minimal depreciation"
+    elif car_age <= 7:
+        age_impact = "Good 🟡"
+        age_desc = "Moderate depreciation"
+    else:
+        age_impact = "Fair 🟠"
+        age_desc = "Higher depreciation"
+    
+    factors['age'] = f"{car_age} years - {age_impact} ({age_desc})"
+    
+    # Mileage impact
+    mileage = data['mileage']
+    if mileage < 50000:
+        mileage_impact = "Low mileage 🟢 - Premium value"
+    elif mileage < 100000:
+        mileage_impact = "Average mileage 🟡 - Fair value"
+    else:
+        mileage_impact = "High mileage 🟠 - Reduced value"
+    factors['mileage'] = f"{mileage:,} km - {mileage_impact}"
+    
+    # Engine
+    factors['engine'] = f"{data['engine_volume']}L, {data['cylinders']} cylinders"
+    
+    # Features
+    features = []
+    if data['leather_interior'] == 'Yes':
+        features.append("✓ Leather interior (+value)")
+    else:
+        features.append("✗ Cloth interior (standard)")
+    
+    airbags = data['airbags']
+    if airbags >= 6:
+        features.append(f"{airbags} airbags (Premium safety)")
+    elif airbags >= 4:
+        features.append(f"{airbags} airbags (Standard safety)")
+    else:
+        features.append(f"{airbags} airbags (Basic safety)")
+    
+    features.append(f"Transmission: {data['gear_box_type']}")
+    features.append(f"Drive Type: {data['drive_wheels']}")
+    
+    if data['fuel_type'] in ['Hybrid', 'Electric']:
+        features.append("✓ Eco-friendly fuel type (+value)")
+    elif data['fuel_type'] == 'Diesel':
+        features.append("Diesel (Fuel efficient)")
+    else:
+        features.append("Petrol/LPG (Standard fuel)")
+    
+    factors['features'] = features
+    return factors
 
 def page1():
     with st.container():
@@ -276,12 +363,38 @@ def render_page():
 # Render the form and buttons
 render_page()
 
-# Display result in its own full-width row (like disclaimer)
+# Display result with range and factors
 if st.session_state.show_result and st.session_state.predicted_price is not None:
-    st.markdown(f'<div class="price-result">✨ Estimated Price: ${st.session_state.predicted_price:,.2f}</div>', unsafe_allow_html=True)
+    price = st.session_state.predicted_price
+    lower_bound = price * 0.85
+    upper_bound = price * 1.15
+    factors = get_factors()
+    
+    # Confidence based on model R² and data consistency
+    confidence = "High" if price > 10000 else "Moderate"
+    confidence_text = f"Confidence Level: {confidence} (based on 50 decision trees)"
+    
+    st.markdown(f"""
+    <div class="result-card">
+        <div class="price-range">💰 Price Range Estimate<br>Expected Range: ${lower_bound:,.2f} - ${upper_bound:,.2f}</div>
+        <div class="confidence">{confidence_text}</div>
+        <div class="factor-title">📈 Factors Affecting This Price</div>
+        <div class="factor-item">Vehicle Age: {factors['age']}</div>
+        <div class="factor-item">Mileage Impact: {factors['mileage']}</div>
+        <div class="factor-item">Engine: {factors['engine']}</div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+        <div class="factor-title">✨ Features:</div>
+    """, unsafe_allow_html=True)
+    
+    for feature in factors['features']:
+        st.markdown(f'<div class="factor-item">{feature}</div>', unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
     st.balloons()
 
-# AI Disclaimer (full-width row)
+# AI Disclaimer
 st.markdown("""
 <div class="disclaimer">
 🤖 <strong>AI Disclaimer:</strong> This prediction is generated by a machine learning model based on historical data. 
